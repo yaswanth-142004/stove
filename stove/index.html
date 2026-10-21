@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stove — watch controls for Mac</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header><div class="brand"><div class="mark"></div> STOVE <span>/ WATCH REMOTE</span></div><div class="badge"><span class="dot" id="dot"></span><span id="connection">Starting…</span></div></header>
+    <h1>Your watch.<br>Your Mac.<span style="color:#e9601a"> Connected.</span></h1>
+    <p class="lead">Double-press the crown from the watch face to open Music. Each “track” is a Mac action. Next and previous change tracks; crown turns run the selected action. Find Phone sleeps the Mac.</p>
+    <main class="grid">
+      <section class="watch-panel"><div class="panel-head"><span>Watch music card</span><span id="trackCounter">01 / 06</span></div><div class="watch"><div class="watch-kicker">Stove remote</div><div class="watch-title" id="watchTitle">Vertical scroll</div><div class="watch-artist" id="watchArtist">Connecting…</div><div class="watch-transport"><span>Ⅰ◀</span><span id="playIcon">Ⅱ</span><span>▶Ⅰ</span></div><div class="watch-volume"><div id="volumeFill"></div></div></div><div class="watch-panel-foot"><span id="modeHint">Crown ↕ to control</span><span id="activeApp">Current app</span></div></section>
+      <div class="right">
+        <section class="card"><div class="eyebrow">Music tracks → Mac actions</div><h2>Choose a control</h2><div id="tracks"></div><div class="controls"><button onclick="send('previous')">Ⅰ◀ Previous</button><button onclick="send('next')">Next ▶Ⅰ</button><button onclick="send('down')">− Crown</button><button class="primary" onclick="send('up')">+ Crown</button><button onclick="send('pause')">Ⅱ Pause</button><button onclick="send('play')">▶ Play</button></div><p class="muted">Play enables controls; Pause suspends crown actions. These buttons let you test without touching the watch.</p></section>
+        <section class="card permission" id="permissionCard"><div class="eyebrow">Mac permission</div><strong id="permissionTitle">Accessibility needed for scrolling</strong><p id="permissionText">Brightness, volume, and app switching work now. To scroll other apps, allow Stove in System Settings → Privacy & Security → Accessibility.</p><button id="permissionButton" onclick="send('permission')">Request Accessibility</button></section>
+        <section class="card"><div class="eyebrow">Quick watch action</div><h2 style="margin-bottom:7px">Find Phone → Sleep Mac</h2><p class="muted">Open Find Phone on the watch and trigger it to put this Mac to sleep. Repeated signals are ignored for five seconds. Wake the Mac normally; the controller will reconnect.</p></section>
+      </div>
+    </main>
+    <div class="lower">
+      <section class="card"><div class="eyebrow">Customize</div><h2>Add an app track</h2><div class="add-row"><select id="appSelect"><option value="">Loading running apps…</option></select><button class="primary" onclick="addApp()">Add</button></div><p class="muted">App tracks bring that app forward and scroll it with the crown. Added tracks are saved in tracks.json.</p></section>
+      <section class="card"><div class="eyebrow">Live input</div><h2>Watch events</h2><div class="meter" id="meter"></div><div class="last" id="lastAction">Ready</div><div class="error" id="error"></div></section>
+    </div>
+    <footer><span id="detail">Connecting…</span><br><button class="quit" onclick="send('quit')">Quit Stove</button></footer>
+  </div>
+  <script>
+    const labels={up:'crown +',down:'crown −',next:'next',previous:'previous',play:'play',pause:'pause',find_phone:'find phone',other:'other'};
+    const hints={scroll_current:'Move the pointer over content; turn the crown to scroll vertically',brightness:'Changes the built-in display',switch_apps:'Cycles through running Mac apps',system_volume:'Adjusts the Mac’s output volume',scroll_horizontal:'Scrolls sideways under the mouse pointer',slideshow:'Crown right/left sends Right/Left arrow keys',scroll_app:'Opens and scrolls this app'};
+    const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let last=null;
+    async function send(action,extra={}) { try { await fetch('/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...extra})}); setTimeout(refresh,120); } catch(e) {} }
+    function addApp(){const b=document.getElementById('appSelect').value;if(b)send('add_app',{bundle_id:b});}
+    function removeApp(b){send('remove_app',{bundle_id:b});}
+    function render(s){
+      last=s;const t=s.tracks[s.index];
+      document.getElementById('connection').textContent=s.status==='connected'?'Watch connected':s.status[0].toUpperCase()+s.status.slice(1);
+      document.getElementById('dot').classList.toggle('online',s.status==='connected');
+      document.getElementById('watchTitle').textContent=t.title;
+      document.getElementById('watchArtist').textContent=t.kind==='brightness'?`Display ${Math.round((s.brightness||0)*100)}%`:t.kind==='system_volume'?`Mac volume ${s.system_volume??0}%`:t.kind==='switch_apps'?(s.app_cursor_name||s.active_app):t.kind==='scroll_app'?(t.app_name||'Mac app'):s.active_app;
+      document.getElementById('trackCounter').textContent=String(s.index+1).padStart(2,'0')+' / '+String(s.tracks.length).padStart(2,'0');
+      document.getElementById('volumeFill').style.width=(s.feedback/16*100)+'%';
+      document.getElementById('playIcon').textContent=s.playing?'Ⅱ':'▶';
+      document.getElementById('activeApp').textContent=s.active_app;
+      document.getElementById('modeHint').textContent=s.playing?'Crown ↕ to control':'Paused · press Play';
+      document.getElementById('tracks').innerHTML=s.tracks.map((x,i)=>`<div class="track ${i===s.index?'active':''}"><span class="track-number">${String(i+1).padStart(2,'0')}</span><span class="track-main"><span class="track-title">${safe(x.title)}</span><span class="track-sub">${safe(hints[x.kind])}</span></span>${i===s.index?'<span class="track-live">ON WATCH</span>':''}${x.kind==='scroll_app'?`<button class="remove" onclick="removeApp('${safe(x.bundle_id)}')">Remove</button>`:''}</div>`).join('');
+      const p=document.getElementById('permissionCard');p.classList.toggle('ok',s.scroll_permission);
+      document.getElementById('permissionTitle').textContent=s.scroll_permission?'Scrolling is ready':'Accessibility needed for scrolling';
+      document.getElementById('permissionText').textContent=s.scroll_permission?'Move the pointer over content for vertical or horizontal scrolling. Slideshow sends arrow keys to the active app.':'To scroll or send slideshow arrow keys, allow Stove in System Settings → Privacy & Security → Accessibility.';
+      document.getElementById('permissionButton').style.display=s.scroll_permission?'none':'';
+      document.getElementById('meter').innerHTML=['up','down','next','previous','play','pause','find_phone'].map(k=>`<span>${labels[k]} ${s.counts[k]||0}</span>`).join('');
+      document.getElementById('lastAction').textContent=s.last_action;
+      document.getElementById('error').textContent=s.error||'';
+      document.getElementById('detail').textContent=s.detail;
+      const select=document.getElementById('appSelect'),current=select.value,already=new Set(s.tracks.map(x=>x.bundle_id));
+      const options=s.apps.filter(a=>!already.has(a.bundle_id));
+      const html='<option value="">Choose a running app…</option>'+options.map(a=>`<option value="${safe(a.bundle_id)}">${safe(a.name)}</option>`).join('');
+      if(select.innerHTML!==html){select.innerHTML=html;if(options.some(a=>a.bundle_id===current))select.value=current;}
+    }
+    async function refresh(){try{const r=await fetch('/state');if(r.ok)render(await r.json());}catch(e){document.getElementById('connection').textContent='App offline';document.getElementById('dot').classList.remove('online');}}
+    refresh();setInterval(refresh,350);
+  </script>
+</body>
+</html>
