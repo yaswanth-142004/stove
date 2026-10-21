@@ -12,7 +12,6 @@ import shutil
 import sys
 import threading
 import time
-import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from socketserver import TCPServer
 from pathlib import Path
@@ -90,6 +89,7 @@ class State:
         self.loop: asyncio.AbstractEventLoop | None = None
         self.queue: asyncio.Queue[dict] | None = None
         self.stop_event: asyncio.Event | None = None
+        self.show_window = None
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -156,13 +156,18 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(404, b"Not found", "text/plain")
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/action":
-            self.reply(404, b"Not found", "text/plain")
-            return
+        route = urlparse(self.path).path
         origin = self.headers.get("Origin")
         if origin not in (None, f"http://127.0.0.1:{self.server.server_port}",
                           f"http://localhost:{self.server.server_port}"):
             self.reply(403, b"Forbidden", "text/plain")
+            return
+        if route == "/focus" and self.state.show_window:
+            self.state.show_window()
+            self.reply(200, b"Focused", "text/plain")
+            return
+        if route != "/action":
+            self.reply(404, b"Not found", "text/plain")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -480,28 +485,36 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8790)
     parser.add_argument("--key-file", type=Path, default=APP_DATA / "watch.key")
     parser.add_argument("--pair-if-needed", action="store_true", default=True)
-    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--headless", "--no-browser", action="store_true")
     args = parser.parse_args()
     state = State(load_tracks())
     Handler.state = state
     try:
         server = LocalHTTPServer(("127.0.0.1", args.port), Handler)
     except OSError:
-        from urllib.request import urlopen
+        from urllib.request import Request, urlopen
         try:
             with urlopen(f"http://127.0.0.1:{args.port}/app-id", timeout=1) as response:
                 if response.read() == b"stove":
-                    webbrowser.open(f"http://127.0.0.1:{args.port}")
-                    return
+                    with urlopen(Request(f"http://127.0.0.1:{args.port}/focus", data=b"", method="POST"), timeout=2) as response:
+                        if response.status == 200:
+                            return
         except OSError:
             pass
         raise
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"Stove: http://127.0.0.1:{args.port}", flush=True)
-    if not args.no_browser:
-        webbrowser.open(f"http://127.0.0.1:{args.port}")
     try:
-        asyncio.run(run(state, args))
+        if args.headless:
+            asyncio.run(run(state, args))
+        else:
+            from native_window import run_native
+            worker = threading.Thread(target=lambda: asyncio.run(run(state, args)), daemon=True)
+            worker.start()
+            run_native(state, args.port, worker)
+            if state.loop and state.stop_event:
+                state.loop.call_soon_threadsafe(state.stop_event.set)
+            worker.join(timeout=10)
     except KeyboardInterrupt:
         pass
     finally:

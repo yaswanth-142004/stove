@@ -2,3 +2,4 @@ bleak==3.0.2
 cryptography==50.0.2
 pyobjc-framework-Cocoa==12.2.2
 pyobjc-framework-CoreBluetooth==12.2.2
+pyobjc-framework-WebKit==12.2.2
