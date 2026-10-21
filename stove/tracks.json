@@ -1,0 +1,8 @@
+[
+  {"id": "vertical", "title": "Vertical scroll", "kind": "scroll_current"},
+  {"id": "apps", "title": "Switch apps", "kind": "switch_apps"},
+  {"id": "brightness", "title": "Brightness", "kind": "brightness"},
+  {"id": "volume", "title": "Sound", "kind": "system_volume"},
+  {"id": "horizontal", "title": "Horizontal scroll", "kind": "scroll_horizontal"},
+  {"id": "slides", "title": "Slideshow", "kind": "slideshow"}
+]

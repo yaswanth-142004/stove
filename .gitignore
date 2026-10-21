@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.dmg
+*.zip
+*.key
+*.pem
+.DS_Store
