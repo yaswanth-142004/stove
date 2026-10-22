@@ -17,7 +17,26 @@ Find Phone puts the Mac to sleep. Play enables controls and Pause suspends crown
 
 ## Install
 
-Download the Apple Silicon DMG from [Releases](https://github.com/yaswanth-142004/stove/releases), drag Stove to Applications, and open it. Stove opens a native Mac window with its local dashboard. If macOS blocks the app because it is not notarized, use System Settings → Privacy & Security → Open Anyway. Allow Bluetooth and Accessibility when prompted. Keep the phone companion disconnected while using Stove, and confirm pairing on the watch the first time. The pairing key is saved only in `~/Library/Application Support/Stove/watch.key`.
+Download the Apple Silicon DMG from [Releases](https://github.com/yaswanth-142004/stove/releases), drag Stove to Applications, and open it. Stove opens a native Mac window with its local dashboard.
+
+### Install from Terminal with curl
+
+On another Apple Silicon Mac running macOS 13 or later, quit any running copy of Stove, then paste this into Terminal. It downloads the v0.2.2 DMG from GitHub Releases, checks its SHA-256 checksum, and installs Stove for the current user in `~/Applications` without an administrator password.
+
+```sh
+(
+  set -e
+  stove_tmp="$(mktemp -d)"
+  trap 'hdiutil detach -quiet "$stove_tmp/mount" >/dev/null 2>&1 || true' EXIT
+  curl -fL 'https://github.com/yaswanth-142004/stove/releases/download/v0.2.2/Stove-0.2.2-macos-arm64.dmg' -o "$stove_tmp/Stove.dmg"
+  printf '%s  %s\n' 'fded68c43b6799a42596284b9efed844a95a0e03f135b7329f7b8fd4e00f233a' "$stove_tmp/Stove.dmg" | shasum -a 256 -c -
+  mkdir -p "$stove_tmp/mount" "$HOME/Applications"
+  hdiutil attach -quiet -nobrowse -readonly -mountpoint "$stove_tmp/mount" "$stove_tmp/Stove.dmg"
+  ditto "$stove_tmp/mount/Stove.app" "$HOME/Applications/Stove.app"
+)
+```
+
+Open `~/Applications/Stove.app` afterward. The release is ad hoc signed but not notarized, so the first launch may require System Settings → Privacy & Security → Open Anyway. Allow Bluetooth and Accessibility when prompted. Keep the phone companion disconnected while using Stove, and confirm pairing on the watch the first time. Each Mac pairs separately; its pairing key is saved only in `~/Library/Application Support/Stove/watch.key` on that Mac.
 
 The watch crown shortcut must be set to open Music in Nothing X. Stove has been tested with a CMF Watch 3 Pro on firmware 1.0.1.77 and macOS on Apple Silicon. Other watch models and Intel Macs are untested. Brightness is for the built-in display. Find Phone sleep can interrupt an active session.
 
