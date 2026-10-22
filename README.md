@@ -1,6 +1,6 @@
 # Stove
 
-[Website and Mac download](https://stove-watch.pinkcurry64.chatgpt.site) · [GitHub Releases](https://github.com/yaswanth-142004/stove/releases)
+[Website and Mac download](https://yaswanth-142004.github.io/stove/) · [GitHub Releases](https://github.com/yaswanth-142004/stove/releases)
 
 Turn a CMF Watch 3 Pro into a Mac remote. Double-press the watch crown to open Music; each music “track” is a control mode. Next/previous selects a mode, and turning the crown performs its action.
 
