@@ -30,8 +30,8 @@ app = BUNDLE(
     bundle_identifier='dev.stove.watch',
     info_plist={
         'CFBundleDisplayName': 'Stove',
-        'CFBundleShortVersionString': '0.2.1',
-        'CFBundleVersion': '3',
+        'CFBundleShortVersionString': '0.2.2',
+        'CFBundleVersion': '4',
         'LSMinimumSystemVersion': '13.0',
         'NSBluetoothAlwaysUsageDescription': 'Stove connects to your CMF Watch 3 Pro to control this Mac.',
     },
