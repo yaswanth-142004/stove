@@ -17,7 +17,7 @@ from socketserver import TCPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from mac_actions import MacActions
+from mac_actions import MacActions, PERMISSION_NAME
 from watch import BleTransport, Session, ops, pl, scan
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -98,7 +98,8 @@ class State:
                     "status": self.status, "detail": self.detail,
                     "active_app": self.active_app, "app_cursor_name": self.app_cursor_name,
                     "brightness": self.brightness, "system_volume": self.system_volume,
-                    "scroll_permission": self.scroll_permission, "apps": self.apps.copy(),
+                    "scroll_permission": self.scroll_permission, "permission_name": PERMISSION_NAME,
+                    "apps": self.apps.copy(),
                     "last_action": self.last_action, "error": self.error,
                     "counts": self.counts.copy(), "history": self.history.copy()}
 
@@ -244,7 +245,7 @@ async def process_events(state: State, actions: MacActions, bridge: Bridge) -> N
                 return
             if name == "permission":
                 allowed = actions.request_scroll_permission()
-                state.set(scroll_permission=allowed, error="" if allowed else "Allow Accessibility in System Settings, then return here")
+                state.set(scroll_permission=allowed, error="" if allowed else f"Allow Stove in {PERMISSION_NAME}, then return here")
                 continue
             if name == "add_app":
                 bundle_id = command["bundle_id"]

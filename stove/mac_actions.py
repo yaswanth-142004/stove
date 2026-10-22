@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import ctypes
+import platform
 import re
 import subprocess
 import time
 
 from AppKit import (NSApplicationActivateAllWindows, NSApplicationActivateIgnoringOtherApps,
                     NSRunningApplication, NSWorkspace)
+
+
+def permission_name() -> str:
+    version = platform.mac_ver()[0]
+    major = int(version.split(".")[0]) if version else 0
+    return "Device Control and Data Access" if major >= 27 else "Accessibility"
+
+
+PERMISSION_NAME = permission_name()
 
 
 class Point(ctypes.Structure):
@@ -108,7 +118,7 @@ class MacActions:
 
     def scroll(self, delta: int, bundle_id: str | None = None) -> str:
         if not self.can_scroll():
-            raise PermissionError("Enable Accessibility access to scroll Mac apps")
+            raise PermissionError(f"Enable {PERMISSION_NAME} to scroll Mac apps")
         if bundle_id:
             name = self.activate_app(bundle_id)
             pid = int(self.app_for_bundle(bundle_id).processIdentifier())
@@ -122,7 +132,7 @@ class MacActions:
 
     def scroll_horizontal(self, delta: int) -> str:
         if not self.can_scroll():
-            raise PermissionError("Enable Accessibility access to scroll Mac apps")
+            raise PermissionError(f"Enable {PERMISSION_NAME} to scroll Mac apps")
         name, _, _ = self.frontmost()
         self._post_wheel(0, int(delta), self._pointer_point())
         return name
@@ -151,7 +161,7 @@ class MacActions:
 
     def slideshow_arrow(self, direction: int) -> str:
         if not self.can_scroll():
-            raise PermissionError("Enable Accessibility access to send slideshow keys")
+            raise PermissionError(f"Enable {PERMISSION_NAME} to send slideshow keys")
         name, _, _ = self.frontmost()
         keycode = 124 if direction > 0 else 123  # Right / Left arrow
         for key_down in (True, False):
