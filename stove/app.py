@@ -443,7 +443,11 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
             raise
         except Exception as exc:
             safe = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-            state.set(status="reconnecting", detail=f"{safe} Retrying in 5 seconds.")
+            if type(exc).__name__ == "BleakBluetoothNotAvailableError":
+                detail = "Bluetooth is unavailable. Turn it on to reconnect."
+            else:
+                detail = f"{safe} Retrying in 5 seconds."
+            state.set(status="reconnecting", detail=detail)
             print(f"reconnecting: {safe}", flush=True)
             await asyncio.sleep(5)
         finally:
