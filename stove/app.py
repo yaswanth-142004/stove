@@ -472,10 +472,7 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
                 if announcement_payload[0] not in (0, 2):
                     return
                 if transfer_lock.locked():
-                    try:
-                        await current_session.reject_recording()
-                    except Exception:
-                        pass
+                    # Ignore duplicate announcements while a transfer is already underway
                     return
                 async with transfer_lock:
                     try:
@@ -484,6 +481,7 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
                         def on_progress(current: int, total: int) -> None:
                             pct = round(current / total * 100)
                             state.set(last_action=f"Receiving recording: {pct}% ({current // 1024} KB)")
+                            print(f"Recording progress: {pct}% ({current}/{total} bytes)", flush=True)
 
                         filename, data = await current_session.receive_recording(announcement_payload, on_progress=on_progress)
                         item = RECORDINGS.save_recording(filename, data)
@@ -494,6 +492,8 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
                         safe = str(exc) if isinstance(exc, (RuntimeError, ValueError)) else type(exc).__name__
                         state.set(error=safe, last_action="Failed to receive recording")
                         print(f"Recording error: {safe}", flush=True)
+                        import traceback
+                        traceback.print_exc()
 
             def on_message(msg) -> None:
                 if msg.op == ops.MUSIC_BUTTON and len(msg.payload) >= 2:
