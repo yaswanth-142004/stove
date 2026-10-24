@@ -21,15 +21,15 @@ Download the Apple Silicon DMG from [Releases](https://github.com/yaswanth-14200
 
 ### Install from Terminal with curl
 
-On another Apple Silicon Mac running macOS 13 or later, quit any running copy of Stove, then paste this into Terminal. It downloads the v0.2.3 DMG from GitHub Releases, checks its SHA-256 checksum, and installs Stove for the current user in `~/Applications` without an administrator password.
+On another Apple Silicon Mac running macOS 13 or later, quit any running copy of Stove, then paste this into Terminal. It downloads the v0.2.4 DMG from GitHub Releases, checks its SHA-256 checksum, and installs Stove for the current user in `~/Applications` without an administrator password.
 
 ```sh
 (
   set -e
   stove_tmp="$(mktemp -d)"
   trap 'hdiutil detach -quiet "$stove_tmp/mount" >/dev/null 2>&1 || true' EXIT
-  curl -fL 'https://github.com/yaswanth-142004/stove/releases/download/v0.2.3/Stove-0.2.3-macos-arm64.dmg' -o "$stove_tmp/Stove.dmg"
-  printf '%s  %s\n' '46825c89345ef704cca154f6fb8c2ede2120be9fcea6522fe978f9d9ce6ba9ae' "$stove_tmp/Stove.dmg" | shasum -a 256 -c -
+  curl -fL 'https://github.com/yaswanth-142004/stove/releases/download/v0.2.4/Stove-0.2.4-macos-arm64.dmg' -o "$stove_tmp/Stove.dmg"
+  printf '%s  %s\n' '0ede3574476a67dc8112de7fa37cbc8f7cd2d00450dfbe6a089613187083767f' "$stove_tmp/Stove.dmg" | shasum -a 256 -c -
   mkdir -p "$stove_tmp/mount" "$HOME/Applications"
   hdiutil attach -quiet -nobrowse -readonly -mountpoint "$stove_tmp/mount" "$stove_tmp/Stove.dmg"
   ditto "$stove_tmp/mount/Stove.app" "$HOME/Applications/Stove.app"

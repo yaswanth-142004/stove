@@ -336,4 +336,3 @@ class Session:
         # Send END status (0x00 = success)
         await self.send(ops.RECORDING_END, b"\x00")
         return filename, bytes(chunks)
-
