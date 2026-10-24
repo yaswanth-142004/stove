@@ -19,6 +19,8 @@ With the phone calling connection disconnected, macOS currently lists `CMF Watch
 
 The watch's built-in Voice Assistant is a separate path: while connected to Stove over BLE, it asked to connect to the phone. HFP pairing alone may provide call audio without making that built-in assistant page usable.
 
+After the watch was connected to the Mac, opening its Phone Call app also displayed "connect to phone". A Mac BLE connection therefore does not satisfy the watch's phone-dependent call UI. This does not establish whether a separate HFP audio pairing is possible; macOS still exposes no watch audio device.
+
 [Nothing's Watch 3 Pro support instructions](https://support.nothing.tech/hc/en-us/categories/31667489672209) say the ChatGPT assistant requires the phone's ChatGPT app, and recording upload must be initiated from the watch into Nothing X. [Gadgetbridge](https://freeyourgadget.codeberg.page/gadgetbridge_org/gadgets/wearables/nothing/) lists the Watch Pro 3 as partially supported and does not document voice or recording transfer support.
 
 ## Recording-transfer experiment
