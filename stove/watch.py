@@ -119,18 +119,20 @@ class FrameReader:
             _, advertised, cmd1, count, index, cmd2 = _HEADER.unpack_from(self.buffer)
             op = (cmd1, cmd2)
             encrypted = self.key is not None and op not in _PLAIN_OPS
-            # Unencrypted watch notifications omit their four-byte CRC on wire.
-            wire_size = advertised if encrypted else max(0, advertised - 4)
-            if len(self.buffer) < _HEADER.size + wire_size:
+            if len(self.buffer) < _HEADER.size + advertised:
                 break
-            chunk = bytes(self.buffer[_HEADER.size:_HEADER.size + wire_size])
-            del self.buffer[:_HEADER.size + wire_size]
+            body = bytes(self.buffer[_HEADER.size:_HEADER.size + advertised])
+            del self.buffer[:_HEADER.size + advertised]
             if encrypted:
                 assert self.key is not None
-                opened = _unseal(self.key, chunk)
+                opened = _unseal(self.key, body)
                 if len(opened) < 4 or opened[-4:] != _crc(opened[:-4]):
                     raise ValueError("Watch frame checksum failed")
                 chunk = opened[:-4]
+            elif op == ops.RECORDING_DATA:
+                chunk = body[:-4] if len(body) >= 4 else body
+            else:
+                chunk = body
             if count <= 1:
                 result.append(Message(op, chunk))
                 continue
@@ -315,8 +317,17 @@ class Session:
         while len(chunks) < total:
             amount = min(2048, total - len(chunks))
             request = len(chunks).to_bytes(4, "little") + amount.to_bytes(4, "little")
-            response = await self.request(ops.RECORDING_READ, request, ops.RECORDING_DATA, timeout=15.0)
-            if not response.payload:
+            response = None
+            for attempt in range(3):
+                try:
+                    response = await self.request(ops.RECORDING_READ, request, ops.RECORDING_DATA, timeout=4.0)
+                    if response.payload:
+                        break
+                except asyncio.TimeoutError:
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(0.05)
+            if not response or not response.payload:
                 raise RuntimeError("Empty recording chunk received")
             chunks.extend(response.payload)
             if on_progress:
