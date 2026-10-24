@@ -15,14 +15,16 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from socketserver import TCPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from mac_actions import MacActions, PERMISSION_NAME
+from recordings import RecordingLibrary, MIME, MAX_RECORDING_BYTES
 from watch import BleTransport, Session, ops, pl, scan
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 APP_DATA = Path(os.environ.get("STOVE_DATA_DIR", Path.home() / "Library/Application Support/Stove"))
 TRACKS_PATH = APP_DATA / "tracks.json"
+RECORDINGS = RecordingLibrary(APP_DATA / "recordings")
 WATCH_CODES = {b"\x03\x01": "up", b"\x03\x00": "down",
                b"\x01\x00": "pause", b"\x01\x01": "play",
                b"\x02\x01": "next", b"\x02\x00": "previous"}
@@ -153,6 +155,23 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, json.dumps(self.state.snapshot()).encode(), "application/json")
         elif route == "/app-id":
             self.reply(200, b"stove", "text/plain")
+        elif route == "/recordings":
+            self.reply(200, json.dumps(RECORDINGS.list()).encode(), "application/json")
+        elif route.startswith("/recordings/"):
+            try:
+                item, path = RECORDINGS.resolve(route.removeprefix("/recordings/"))
+            except (FileNotFoundError, OSError, ValueError, KeyError):
+                self.reply(404, b"Recording not found", "text/plain")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", MIME[item["extension"]])
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            with path.open("rb") as source:
+                shutil.copyfileobj(source, self.wfile)
         else:
             self.reply(404, b"Not found", "text/plain")
 
@@ -166,6 +185,18 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/focus" and self.state.show_window:
             self.state.show_window()
             self.reply(200, b"Focused", "text/plain")
+            return
+        if route == "/recordings/import":
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= MAX_RECORDING_BYTES:
+                    raise ValueError("Choose an audio file up to 64 MB")
+                filename = unquote(self.headers.get("X-File-Name", ""))
+                item = RECORDINGS.import_stream(self.rfile, filename, size)
+            except (ValueError, OSError) as error:
+                self.reply(400, str(error).encode(), "text/plain; charset=utf-8")
+                return
+            self.reply(201, json.dumps(item).encode(), "application/json")
             return
         if route != "/action":
             self.reply(404, b"Not found", "text/plain")
@@ -393,11 +424,21 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
             state.set(status="scanning", detail="Looking for CMF Watch 3 Pro")
             devices = await scan(timeout=8.0)
             watch = next((d for d in devices if "Watch 3 Pro" in (d.name or "")), None)
-            if watch is None:
+            address = watch.address if watch else None
+            addr_file = APP_DATA / "watch.address"
+            if address is None and addr_file.exists():
+                saved_addr = addr_file.read_text(encoding="ascii").strip()
+                if saved_addr:
+                    address = saved_addr
+            if address is None:
                 raise RuntimeError("Watch not found. Disconnect the phone companion and keep the watch nearby.")
             state.set(status="connecting", detail="Connecting to watch")
-            transport = BleTransport(watch.address)
+            transport = BleTransport(address)
             await transport.connect()
+            try:
+                addr_file.write_text(address, encoding="ascii")
+            except OSError:
+                pass
             session = Session(transport)
             if args.key_file.exists():
                 state.set(status="authenticating", detail="Logging in with saved key")
@@ -421,6 +462,39 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
             else:
                 raise RuntimeError("No saved key. Restart with --pair-if-needed.")
 
+            transfer_lock = asyncio.Lock()
+
+            async def handle_recording(current_session, announcement_payload: bytes) -> None:
+                if len(announcement_payload) < 6:
+                    return
+                # announcement_payload[0]: 0 = initial transfer, 2 = retry transfer.
+                # States 6 and 8 are recording start/stop notifications on the watch.
+                if announcement_payload[0] not in (0, 2):
+                    return
+                if transfer_lock.locked():
+                    try:
+                        await current_session.reject_recording()
+                    except Exception:
+                        pass
+                    return
+                async with transfer_lock:
+                    try:
+                        state.set(last_action="Receiving recording from watch...")
+
+                        def on_progress(current: int, total: int) -> None:
+                            pct = round(current / total * 100)
+                            state.set(last_action=f"Receiving recording: {pct}% ({current // 1024} KB)")
+
+                        filename, data = await current_session.receive_recording(announcement_payload, on_progress=on_progress)
+                        item = RECORDINGS.save_recording(filename, data)
+                        state.log("recording", "watch")
+                        state.set(last_action=f"Saved recording {item['name']}", error="")
+                        print(f"Watch recording received: {item['name']} ({item['size']} bytes)", flush=True)
+                    except Exception as exc:
+                        safe = str(exc) if isinstance(exc, (RuntimeError, ValueError)) else type(exc).__name__
+                        state.set(error=safe, last_action="Failed to receive recording")
+                        print(f"Recording error: {safe}", flush=True)
+
             def on_message(msg) -> None:
                 if msg.op == ops.MUSIC_BUTTON and len(msg.payload) >= 2:
                     name = WATCH_CODES.get(msg.payload[:2], "other")
@@ -430,6 +504,8 @@ async def watch_loop(state: State, bridge: Bridge, args: argparse.Namespace) -> 
                         state.queue.put_nowait({"action": name, "source": "watch"})
                 elif msg.op == ops.FIND_PHONE and state.queue:
                     state.queue.put_nowait({"action": "find_phone", "source": "watch"})
+                elif msg.op == ops.RECORDING_ANNOUNCE:
+                    asyncio.create_task(handle_recording(session, msg.payload))
 
             session.on_message(on_message)
             bridge.session = session

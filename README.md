@@ -52,6 +52,12 @@ Stove does not send events to a server. The website only serves downloads; the M
 
 The release is ad hoc signed, not Developer ID notarized. Scrolling and slideshow need Device Control and Data Access permission on macOS 27, or Accessibility permission on older macOS versions. Switch apps cycles through running apps and can skip background-only apps. Watch face crown taps are handled by watch firmware and are not exposed through the observed BLE events.
 
+## Voice Assistant and recordings
+
+The watch's Voice Assistant button starts a Bluetooth Hands-Free voice recognition session. We confirmed that it opens the Android assistant with the watch's calling connection active. Stove's Mac connection currently handles the watch's BLE music controls; it does not yet provide a Bluetooth Hands-Free audio endpoint, so the watch microphone and speaker are not available to a Mac agent through Stove.
+
+Recordings can be received directly in Stove's **Recordings** section. When connected to Stove, tap **Send to phone** on any recording on the watch; Stove accepts the transfer over BLE, downloads the audio chunks, and saves the `.mp3` file to `~/Library/Application Support/Stove/recordings`, where it can be played and saved. You can also import existing audio files directly using **Import audio**.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -37,8 +37,13 @@ ops = SimpleNamespace(
     MUSIC_INFO_SET=(0xFFFF, 0x905C),
     MUSIC_BUTTON=(0xFFFF, 0xA05D),
     FIND_PHONE=(0x005B, 0x0001),
+    RECORDING_ANNOUNCE=(0xFFFF, 0xA097),
+    RECORDING_ACCEPT=(0xFFFF, 0x9097),
+    RECORDING_READ=(0xFFFF, 0x9098),
+    RECORDING_DATA=(0xFFFF, 0xA098),
+    RECORDING_END=(0xFFFF, 0x9099),
 )
-_PLAIN_OPS = {ops.AUTH_PAIR_REQUEST, ops.AUTH_PAIR_REPLY}
+_PLAIN_OPS = {ops.AUTH_PAIR_REQUEST, ops.AUTH_PAIR_REPLY, ops.RECORDING_DATA}
 _IV = bytes.fromhex("5051525354555657606162636465665A")
 _HEADER = struct.Struct(">BHHHHH")
 _COMMAND_WRITE = "0000fff2-0000-1000-8000-00805f9b34fb"
@@ -289,3 +294,35 @@ class Session:
 
     async def set_music(self, title: str, detail: str, state: int = 2) -> None:
         await self.send(ops.MUSIC_INFO_SET, pl.music_info(title, detail, state))
+
+    async def reject_recording(self) -> None:
+        await self.send(ops.RECORDING_ACCEPT, b"\x01")
+
+    async def receive_recording(self, announcement_payload: bytes,
+                                on_progress: Callable[[int, int], None] | None = None) -> tuple[str, bytes]:
+        if len(announcement_payload) < 6 or announcement_payload[0] not in (0, 2):
+            raise RuntimeError(f"Unexpected recording announcement format (state={announcement_payload[0] if announcement_payload else 'empty'})")
+        total = int.from_bytes(announcement_payload[1:5], "little")
+        filename = announcement_payload[5:].decode("utf-8", "replace").strip("\x00")
+        if not 0 < total <= 64 * 1024 * 1024:
+            raise RuntimeError(f"Invalid recording size: {total}")
+
+        # Send ACCEPT (0x02 = ready to receive). The watch does not ACK this frame.
+        await self.send(ops.RECORDING_ACCEPT, b"\x02")
+        await asyncio.sleep(0.05)
+
+        chunks = bytearray()
+        while len(chunks) < total:
+            amount = min(2048, total - len(chunks))
+            request = len(chunks).to_bytes(4, "little") + amount.to_bytes(4, "little")
+            response = await self.request(ops.RECORDING_READ, request, ops.RECORDING_DATA, timeout=15.0)
+            if not response.payload:
+                raise RuntimeError("Empty recording chunk received")
+            chunks.extend(response.payload)
+            if on_progress:
+                on_progress(len(chunks), total)
+
+        # Send END status (0x00 = success)
+        await self.send(ops.RECORDING_END, b"\x00")
+        return filename, bytes(chunks)
+

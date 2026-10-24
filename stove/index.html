@@ -19,6 +19,7 @@
       <section class="card"><div class="eyebrow">Make it yours</div><h2>Add an app mode</h2><div class="add-row"><select id="appSelect" aria-label="Running app"><option value="">Loading running apps…</option></select><button class="accent-button" onclick="addApp()">Add mode</button></div><p class="muted">An app mode brings that app forward and scrolls it with the crown.</p></section>
       <section class="card activity"><div class="eyebrow">Activity</div><h2>Recent input</h2><div class="last" id="lastAction">Ready</div><div class="meter" id="meter"></div><div class="error" id="error"></div></section>
     </div>
+    <section class="card recordings-card" aria-label="Watch recordings"><div class="section-head"><div><div class="eyebrow">Audio</div><h2>Recordings</h2></div><label class="accent-button import-button">Import audio<input id="recordingFile" type="file" accept="audio/*,.amr,.3gp,.opus" onchange="importRecording(this.files[0])"></label></div><p class="recording-help">Tap <em>Send to phone</em> on the watch to transfer a recording directly to Stove, or import an audio file below.</p><div id="recordingStatus" class="recording-status" role="status"></div><div id="recordingList" class="recording-list"><span class="recording-empty">No recordings imported yet.</span></div></section>
     <footer><span id="detail">Connecting…</span><span>Find Phone on the watch sleeps your Mac.</span><button class="quit" onclick="send('quit')">Quit Stove</button></footer>
   </div>
   <script>
@@ -30,6 +31,9 @@
     async function send(action,extra={}) { try { await fetch('/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...extra})}); setTimeout(refresh,120); } catch(e) {} }
     function addApp(){const b=document.getElementById('appSelect').value;if(b)send('add_app',{bundle_id:b});}
     function removeApp(b){send('remove_app',{bundle_id:b});}
+    let recordingSignature='';
+    async function refreshRecordings(){try{const response=await fetch('/recordings');if(!response.ok)return;const items=await response.json();const signature=JSON.stringify(items);if(signature===recordingSignature)return;recordingSignature=signature;document.getElementById('recordingList').innerHTML=items.length?items.map(item=>`<div class="recording-row"><div><strong>${safe(item.name)}</strong><span>${new Date(item.created*1000).toLocaleString()} · ${(item.size/1024).toFixed(0)} KB</span></div><audio controls preload="none" src="/recordings/${item.id}"></audio><a href="/recordings/${item.id}" download="${safe(item.name)}">Save</a></div>`).join(''):'<span class="recording-empty">No recordings imported yet.</span>';}catch(e){}}
+    async function importRecording(file){if(!file)return;const status=document.getElementById('recordingStatus');status.textContent='Importing '+file.name+'…';try{const response=await fetch('/recordings/import',{method:'POST',headers:{'X-File-Name':encodeURIComponent(file.name)},body:file});if(!response.ok)throw new Error(await response.text());status.textContent='Imported '+file.name;await refreshRecordings();}catch(error){status.textContent=error.message||'Import failed';}document.getElementById('recordingFile').value='';}
     function render(s){
       last=s;const t=s.tracks[s.index];
       document.getElementById('connection').textContent=s.status==='connected'?'Watch connected':s.status[0].toUpperCase()+s.status.slice(1);
@@ -57,7 +61,7 @@
       if(select.innerHTML!==html){select.innerHTML=html;if(options.some(a=>a.bundle_id===current))select.value=current;}
     }
     async function refresh(){try{const r=await fetch('/state');if(r.ok)render(await r.json());}catch(e){document.getElementById('connection').textContent='App offline';document.getElementById('dot').classList.remove('online');}}
-    refresh();setInterval(refresh,350);
+    refresh();refreshRecordings();setInterval(refresh,350);setInterval(refreshRecordings,5000);
   </script>
 </body>
 </html>
