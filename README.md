@@ -54,9 +54,11 @@ The release is ad hoc signed, not Developer ID notarized. Scrolling and slidesho
 
 ## Voice Assistant and recordings
 
-The watch's Voice Assistant button starts a Bluetooth Hands-Free voice recognition session. We confirmed that it opens the Android assistant with the watch's calling connection active. Stove's Mac connection currently handles the watch's BLE music controls; it does not yet provide a Bluetooth Hands-Free audio endpoint, so the watch microphone and speaker are not available to a Mac agent through Stove.
+**Direct recording transfer works.** With the watch connected to Stove, open a recording on the watch and tap **Send to phone**. Stove receives the audio over BLE and saves the `.mp3` file in `~/Library/Application Support/Stove/recordings`. Play or save it from Stove's **Recordings** section. You can also use **Import audio** for an existing file. The recording stays on this Mac.
 
-Recordings can be received directly in Stove's **Recordings** section. When connected to Stove, tap **Send to phone** on any recording on the watch; Stove accepts the transfer over BLE, downloads the audio chunks, and saves the `.mp3` file to `~/Library/Application Support/Stove/recordings`, where it can be played and saved. You can also import existing audio files directly using **Import audio**.
+**The watch's live Voice Assistant is not connected to Stove yet.** We tested it with Nothing X on an Android 16 phone: it opened the Android assistant when the watch's Bluetooth calling connection was active. Inspection of the installed Nothing X 3.10.1 app found a separate Bluetooth Headset connection in addition to its BLE data connection. The phone diagnostic confirmed a Hands-Free control connection, but its HCI log contained no usable packets, so we have not captured the exact voice trigger or all of the watch's connection checks.
+
+The watch advertises a Hands-Free service to the Mac, but our Classic Bluetooth and Hands-Free connection attempts timed out. macOS exposed no watch microphone or speaker. With only Stove's BLE connection, the watch's Voice Assistant and Calls screens say **“connect to phone.”** Pairing over BLE alone does not make those live audio features work. Do not expect the Voice Assistant button to start a Mac agent or play a reply through the watch speaker in v0.2.4.
 
 ## License
 
